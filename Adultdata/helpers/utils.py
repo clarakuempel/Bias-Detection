@@ -6,6 +6,50 @@ from fairlearn.metrics import (
     demographic_parity_difference,
     demographic_parity_ratio,
 )
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+def plot_fairness_and_accuracy(results, group="sex", title="Accuracy and Fairness vs λ"):
+    sns.set(style="whitegrid", font_scale=1.2)
+    color1= "#fca483"
+    color2 = "#71c5ab"
+    color3= "#daa156"
+
+    lambdas = results["lambda"]
+    acc = [100 * a for a in results["test_accuracy"]]
+    dp = results[f"dp_diff_{group}"]
+    eo = results[f"eo_diff_{group}"]
+
+    fig, ax1 = plt.subplots(figsize=(8, 5))
+
+    # First Y-axis: Accuracy
+    ax1.plot(lambdas, acc, marker="o", label="Accuracy", color=color2)
+    ax1.set_ylabel("Test Accuracy (%)", color=color2)
+    ax1.set_xlabel(r"$\lambda$ (Fairness penalty)")
+
+    ax1.set_xscale("log")
+    ax1.tick_params(axis="y", labelcolor=color2)
+
+    # Second Y-axis: Fairness
+    ax2 = ax1.twinx()
+    ax2.plot(lambdas, dp, marker="s", label="DP difference", color=color1)
+    ax2.plot(lambdas, eo, marker="^", label="EO difference", color=color3)
+
+
+    ax2.set_ylabel(r"Fairness violation ($\downarrow$ better)", color="gray")
+    ax2.tick_params(axis="y", labelcolor="gray")
+
+    # Combine legends
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3)
+    ax2.axhline(0.05, color="gray", linestyle="--", linewidth=1, alpha=0.5)
+    ax2.set_ylim(0, 0.3)
+    
+    plt.title(title)
+    plt.tight_layout()
+    plt.show()
 
 def bin_hours_per_week(hpw):
     """
@@ -106,7 +150,6 @@ def group_box_plots(
     )
 
 
-def group_bar_plots(
     scores,
     attr,
     groups=None,
@@ -177,7 +220,6 @@ def group_bar_plots(
     )
 
 
-def group_roc_curves(labels, scores, attr):
     """
     Helper function for plotting group ROC curves. Assumes binary labels.
     """
@@ -248,7 +290,7 @@ def bar_chart(
     """
     # Outline colours predefined for adjustability
     x_grid_color = TRANSPARENT
-    y_grid_color = GRID_COLOR
+    y_grid_color = "#71c5ab"
     x_zero_line_color = x_grid_color
     y_zero_line_color = y_grid_color
     # Background colours
@@ -266,7 +308,7 @@ def bar_chart(
                 x=x,
                 y=y,
                 marker={
-                    "color": _hex_to_rgba(COLORS[0], 0.5),
+                    "color": _hex_to_rgba("#fca483", 0.5),
                     "line_color": COLORS[0],
                     "line_width": 1,
                 },
@@ -274,6 +316,7 @@ def bar_chart(
         ],
         layout={
             "autosize": True,
+            "width": 500,
             "hovermode": "closest",
             "title": title,
             "xaxis": {
@@ -297,147 +340,6 @@ def bar_chart(
     )
 
 
-def calibration_curves(
-    labels, scores, attr, title="", xlabel="", ylabel="", n_bins=10,
-):
-    bins = np.linspace(0, 1, n_bins + 1)
-    x = (bins[1:] + bins[:-1]) / 2
-
-    # Outline colours predefined for adjustability
-    x_grid_color = GRID_COLOR
-    y_grid_color = GRID_COLOR
-    x_zero_line_color = x_grid_color
-    y_zero_line_color = y_grid_color
-    # Background colours
-    paper_bgcolor = TRANSPARENT
-    plot_bgcolor = TRANSPARENT
-
-    return go.Figure(
-        data=[
-            go.Scatter(
-                x=x,
-                y=calibration_probabilities(
-                    labels[attr == a], scores[attr == a], n_bins
-                ),
-                name=a,
-                mode="lines+markers",
-                line={"dash": LINE_STYLES[i % len(LINE_STYLES)]},
-                marker={
-                    "color": _hex_to_rgba(COLORS[i], 1),
-                    "symbol": i,
-                    "size": 10,
-                },
-            )
-            for i, a in enumerate(sorted(set(attr)))
-        ],
-        layout={
-            "autosize": True,
-            "hovermode": "closest",
-            "title": title,
-            "xaxis": {
-                "hoverformat": ".3f",
-                "title": xlabel,
-                "gridcolor": x_grid_color,
-                "zerolinecolor": x_zero_line_color,
-                "fixedrange": True,
-            },
-            "yaxis": {
-                "title": ylabel,
-                "gridcolor": y_grid_color,
-                "zerolinecolor": y_zero_line_color,
-                "fixedrange": True,
-            },
-            "paper_bgcolor": paper_bgcolor,
-            "plot_bgcolor": plot_bgcolor,
-        },
-    )
-
-
-def eopp_plots(labels, scores, attr, group_names):
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.1,
-        subplot_titles=("Baseline Model", "Corrected Model"),
-    )
-    for i in range(2):
-        fig.append_trace(
-            go.Bar(
-                x=[scores[i][(attr == 0) & (labels == 1)].mean()],
-                y=[""],
-                name=group_names[0],
-                showlegend=False if i == 1 else True,
-                marker_color="firebrick",
-                width=[0.2, 0.2],
-                orientation="h",
-            ),
-            row=i + 1,
-            col=1,
-        )
-        fig.append_trace(
-            go.Bar(
-                x=[scores[i][(attr == 1) & (labels == 1)].mean()],
-                y=[""],
-                name=group_names[1],
-                showlegend=False if i == 1 else True,
-                marker_color="royalblue",
-                width=[0.2, 0.2],
-                orientation="h",
-            ),
-            row=i + 1,
-            col=1,
-        )
-    fig.update_xaxes(title_text="Mean score", row=2, col=1)
-
-    return fig.update_layout(title_text="Equal opportunity")
-
-
-def eo_plots(labels, scores, attr, group_names):
-
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.1,
-        subplot_titles=("Baseline Model", "Corrected Model"),
-    )
-    for i in range(2):
-        for j in range(2):
-            fig.append_trace(
-                go.Bar(
-                    x=[scores[i][(attr == 0) & (labels == j)].mean()],
-                    y=[""],
-                    name=group_names[1] if j == 1 else group_names[0],
-                    showlegend=False if i == 1 else True,
-                    marker_color="firebrick" if j == 1 else "red",
-                    width=[0.2, 0.2],
-                    orientation="h",
-                ),
-                row=i + 1,
-                col=1,
-            )
-            fig.append_trace(
-                go.Bar(
-                    x=[scores[i][(attr == 1) & (labels == j)].mean()],
-                    y=[""],
-                    name=group_names[3] if j == 1 else group_names[2],
-                    showlegend=False if i == 1 else True,
-                    marker_color="royalblue" if j == 1 else "blue",
-                    width=[0.2, 0.2],
-                    orientation="h",
-                ),
-                row=i + 1,
-                col=1,
-            )
-    fig.update_xaxes(title_text="Mean score", row=2, col=1)
-
-    return fig.update_layout(title_text="Equalised odds")
-
-
-"""
-Helper functions for computing various fairness measures
-"""
 
 
 
@@ -448,107 +350,3 @@ def accuracy(labels, scores, threshold=0.5):
     return ((scores >= threshold) == labels).mean()
 
 
-def demographic_parity_prob(scores, attr):
-    """
-    Computes demographic parity on probability level.
-    """
-    a_mask = attr == 1
-    return np.abs(scores[~a_mask].mean() - scores[a_mask].mean())
-
-
-def conditional_demographic_parity_difference(labels, pred, attr, groups):
-    """
-    Calculate conditional demographic parity by calculating the average
-    demographic parity difference across bins defined by `groups`.
-    """
-    diffs = []
-
-    for group in set(groups):
-        mask = groups == group
-
-        diffs.append(
-            demographic_parity_difference(
-                labels[mask], pred[mask], sensitive_features=attr[mask]
-            )
-        )
-
-    return np.mean(diffs)
-
-
-def conditional_demographic_parity_ratio(labels, pred, attr, groups):
-    """
-    Calculate conditional demographic parity by calculating the average
-    demographic parity ratio across bins defined by `groups`.
-    """
-    ratios = []
-
-    for group in set(groups):
-        mask = groups == group
-
-        ratios.append(
-            demographic_parity_ratio(
-                labels[mask], pred[mask], sensitive_features=attr[mask]
-            )
-        )
-
-    return np.mean(ratios)
-
-
-def equal_opportunity_prob(labels, scores, attr):
-    """
-    Computes equal opportunity on probability level
-    """
-    y_mask = labels == 1
-    return demographic_parity_prob(scores[y_mask], attr[y_mask])
-
-
-def equalised_odds_prob(labels, scores, attr):
-    """
-    Computes equalised odds on probability level
-    """
-    a_mask = attr == 1
-    y_mask = labels == 1
-
-    eo_0 = demographic_parity_prob(scores[~y_mask], a_mask[~y_mask])
-    eo_1 = demographic_parity_prob(scores[y_mask], a_mask[y_mask])
-    return np.mean([eo_0, eo_1])
-
-
-def calibration_probabilities(labels, scores, n_bins=10):
-    """
-    Computes calibration probabilities per bin (i.e. P(Y = 1 | score)) for a
-    set of scores and labels.
-    """
-    bins = np.linspace(0, 1, n_bins + 1)
-    probabilities = np.zeros(n_bins)
-
-    for i, (low, high) in enumerate(zip(bins[:-1], bins[1:])):
-        if high == 1:
-            # allow equality with one in the final bin
-            high = 1.01
-
-        mask = (scores >= low) & (scores < high)
-        probabilities[i] = labels[mask].mean()
-
-    return probabilities
-
-
-def calibration_difference(labels, scores, attr, n_bins=10):
-    """
-    Computes average calibration difference between protected groups. Currently
-    assumes binary protected attribute.
-    """
-    mask = attr == 1
-
-    a0_calibration_probabilities = calibration_probabilities(
-        labels[~mask], scores[~mask], n_bins
-    )
-    a1_calibration_probabilities = calibration_probabilities(
-        labels[mask], scores[mask], n_bins
-    )
-
-    # if a bin is empty we get a nan, so use nanmean to aggregate only over
-    # mutually non-empty bins
-    return np.nanmean(
-        np.abs(a0_calibration_probabilities - a1_calibration_probabilities)
-    )
